@@ -2,7 +2,7 @@
 // Strategia: prima provo la rete (cosi' gli aggiornamenti arrivano subito),
 // se non c'e' connessione uso la copia salvata.
 // Se modifichi i file, cambia il numero di versione qui sotto.
-var CACHE = "calcolorario-v1";
+var CACHE = "calcolorario-v3";
 var FILES = ["./", "index.html", "manifest.webmanifest", "icon-180.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", function (e) {

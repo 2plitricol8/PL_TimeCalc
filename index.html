@@ -61,6 +61,9 @@
   }
   input[type=time]:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   input.err { border-color: var(--bad); }
+  .check { display: flex; align-items: center; gap: 10px; margin: 18px 0 0; font-size: .95rem; color: var(--fg); cursor: pointer; }
+  .check input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); flex: none; }
+  .note { margin: 6px 0 0 32px; font-size: .8rem; color: var(--muted); min-height: 1.1em; }
   .hint { margin: 8px 0 0; font-size: .78rem; color: var(--muted); }
   .results { margin-top: 26px; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; }
   .tile { background: var(--accent-soft); border-radius: 12px; padding: 14px 14px; }
@@ -115,6 +118,8 @@
       <div><label for="out2">Uscita 2</label><input type="time" id="out2"></div>
     </div>
     <p class="hint">Con una sola entrata e uscita lascia vuoti i campi del pomeriggio.</p>
+    <label class="check"><input type="checkbox" id="pausa"> Detrai pausa pranzo (30 min)</label>
+    <div class="note" id="pausaNote"></div>
   </section>
 
   <section class="results" aria-live="polite">
@@ -139,7 +144,7 @@
   var DAILY = 432;
   var ids = ["in1", "out1", "in2", "out2"];
   var el = {};
-  ids.concat(["tot", "stra", "straTile", "bar", "pct", "status", "msg", "reset", "calc"]).forEach(function (i) { el[i] = document.getElementById(i); });
+  ids.concat(["tot", "stra", "straTile", "bar", "pct", "status", "msg", "reset", "calc", "pausa", "pausaNote"]).forEach(function (i) { el[i] = document.getElementById(i); });
 
   function toMin(v) {
     if (!v) return 0;
@@ -164,12 +169,33 @@
   }
   var last = "";
   function calc(force) {
-    var key = ids.map(function (i) { return el[i].value; }).join("|");
+    var key = ids.map(function (i) { return el[i].value; }).join("|") + "|" + el.pausa.checked;
     if (!force && key === last) return;
     last = key;
     var errors = [];
     ids.forEach(function (i) { el[i].classList.remove("err"); });
-    var tot = span("in1", "out1", "1", errors) + span("in2", "out2", "2", errors);
+    var lavorato = span("in1", "out1", "1", errors) + span("in2", "out2", "2", errors);
+    // Pausa pranzo: detrae 30 minuti se non c'e' rientro pomeriggio
+    // oppure, se la pausa tra uscita 1 ed entrata 2 e' inferiore a 30 minuti, detrae la parte mancante (30 - pausa).
+    var detratto = 0, nota = "";
+    if (el.pausa.checked && lavorato > 0) {
+      var rientro = el.in2.value && el.out2.value;
+      if (!rientro) {
+        detratto = 30; nota = "Nessun rientro: detratti 30 min";
+      } else if (el.out1.value && el.in2.value) {
+        var gap = toMin(el.in2.value) - toMin(el.out1.value);
+        if (gap < 0) {
+          errors.push("L'entrata 2 \u00e8 precedente all'uscita 1.");
+          el.in2.classList.add("err"); el.out1.classList.add("err");
+        } else if (gap < 30) {
+          detratto = 30 - gap; nota = "Pausa di " + gap + " min (meno di 30): detratti " + detratto + " min";
+        } else {
+          nota = "Pausa di " + gap + " min: nessuna detrazione";
+        }
+      }
+    }
+    el.pausaNote.textContent = nota;
+    var tot = Math.max(0, lavorato - detratto);
     var stra = tot - DAILY;
     el.tot.textContent = fmt(tot);
     el.stra.textContent = (stra > 0 ? "+" : "") + fmt(stra);
@@ -188,6 +214,11 @@
   });
   // iOS non sempre notifica ogni scatto del selettore orario: controllo periodico dei valori.
   setInterval(function () { calc(false); }, 250);
+  try { el.pausa.checked = localStorage.getItem("pausa30") === "1"; } catch (e) {}
+  el.pausa.addEventListener("change", function () {
+    try { localStorage.setItem("pausa30", el.pausa.checked ? "1" : "0"); } catch (e) {}
+    calc(true);
+  });
   el.reset.addEventListener("click", function () { ids.forEach(function (i) { el[i].value = ""; }); calc(true); });
   el.calc.addEventListener("click", function () { calc(true); });
   calc(true);
